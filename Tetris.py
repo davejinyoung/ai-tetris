@@ -1,5 +1,6 @@
 import random
 import pygame
+from agent import TetrisAgent
 
 """
 10 x 20 grid
@@ -367,6 +368,36 @@ def get_max_score():
     return score
 
 
+def get_game_state(current_piece, next_piece, grid, locked_positions):
+    return {
+        'current_piece': current_piece,
+        'next_piece': next_piece,
+        'grid': grid,
+        'locked_positions': locked_positions
+    }
+
+def perform_action(action, current_piece, grid):
+    if action == 'left':
+        current_piece.x -= 1
+        if not valid_space(current_piece, grid):
+            current_piece.x += 1
+    elif action == 'right':
+        current_piece.x += 1
+        if not valid_space(current_piece, grid):
+            current_piece.x -= 1
+    elif action == 'down':
+        current_piece.y += 1
+        if not valid_space(current_piece, grid):
+            current_piece.y -= 1
+    elif action == 'rotate':
+        current_piece.rotation = current_piece.rotation + 1 % len(current_piece.shape)
+        if not valid_space(current_piece, grid):
+            current_piece.rotation = current_piece.rotation - 1 % len(current_piece.shape)
+    elif action == 'drop':
+        while valid_space(current_piece, grid):
+            current_piece.y += 1
+        current_piece.y -= 1
+
 def main(window):
     locked_positions = {}
     create_grid(locked_positions)
@@ -382,20 +413,18 @@ def main(window):
     score = 0
     last_score = get_max_score()
 
+    if ai_mode:
+        agent = TetrisAgent()
+
     while run:
-        # need to constantly make new grid as locked positions always change
         grid = create_grid(locked_positions)
-
-        # helps run the same on every computer
-        # add time since last tick() to fall_time
-        fall_time += clock.get_rawtime()  # returns in milliseconds
+        fall_time += clock.get_rawtime()
         level_time += clock.get_rawtime()
+        clock.tick()
 
-        clock.tick()  # updates clock
-
-        if level_time/1000 > 5:    # make the difficulty harder every 10 seconds
+        if level_time/1000 > 5:
             level_time = 0
-            if fall_speed > 0.15:   # until fall speed is 0.15
+            if fall_speed > 0.15:
                 fall_speed -= 0.005
 
         if fall_time / 1000 > fall_speed:
@@ -403,92 +432,128 @@ def main(window):
             current_piece.y += 1
             if not valid_space(current_piece, grid) and current_piece.y > 0:
                 current_piece.y -= 1
-                # since only checking for down - either reached bottom or hit another piece
-                # need to lock the piece position
-                # need to generate new piece
                 change_piece = True
 
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                run = False
-                pygame.display.quit()
-                quit()
-
-            elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_LEFT:
-                    current_piece.x -= 1  # move x position left
-                    if not valid_space(current_piece, grid):
-                        current_piece.x += 1
-
-                elif event.key == pygame.K_RIGHT:
-                    current_piece.x += 1  # move x position right
-                    if not valid_space(current_piece, grid):
+        if ai_mode:
+            game_state = get_game_state(current_piece, next_piece, grid, locked_positions)
+            action = agent.choose_action(game_state)
+            perform_action(action, current_piece, grid)
+            # Optional: pygame.time.delay(50) for visibility
+        else:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    run = False
+                    pygame.display.quit()
+                    quit()
+                elif event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_LEFT:
                         current_piece.x -= 1
-
-                elif event.key == pygame.K_DOWN:
-                    # move shape down
-                    current_piece.y += 1
-                    if not valid_space(current_piece, grid):
-                        current_piece.y -= 1
-
-                elif event.key == pygame.K_UP:
-                    # rotate shape
-                    current_piece.rotation = current_piece.rotation + 1 % len(current_piece.shape)
-                    if not valid_space(current_piece, grid):
-                        current_piece.rotation = current_piece.rotation - 1 % len(current_piece.shape)
-
-                elif event.key == pygame.K_SPACE:
-                    # instant drop (hard drop)
-                    while valid_space(current_piece, grid):
+                        if not valid_space(current_piece, grid):
+                            current_piece.x += 1
+                    elif event.key == pygame.K_RIGHT:
+                        current_piece.x += 1
+                        if not valid_space(current_piece, grid):
+                            current_piece.x -= 1
+                    elif event.key == pygame.K_DOWN:
                         current_piece.y += 1
-                    current_piece.y -= 1  # move back up one step since we went too far
-                    change_piece = True
-
+                        if not valid_space(current_piece, grid):
+                            current_piece.y -= 1
+                    elif event.key == pygame.K_UP:
+                        current_piece.rotation = current_piece.rotation + 1 % len(current_piece.shape)
+                        if not valid_space(current_piece, grid):
+                            current_piece.rotation = current_piece.rotation - 1 % len(current_piece.shape)
+                    elif event.key == pygame.K_SPACE:
+                        while valid_space(current_piece, grid):
+                            current_piece.y += 1
+                        current_piece.y -= 1
+                        change_piece = True
         piece_pos = convert_shape_format(current_piece)
-
-        # draw the piece on the grid by giving color in the piece locations
         for i in range(len(piece_pos)):
             x, y = piece_pos[i]
             if y >= 0:
                 grid[y][x] = current_piece.color
-
-        if change_piece:  # if the piece is locked
+        if change_piece:
             for pos in piece_pos:
                 p = (pos[0], pos[1])
-                locked_positions[p] = current_piece.color       # add the key and value in the dictionary
+                locked_positions[p] = current_piece.color
             current_piece = next_piece
             next_piece = get_shape()
             change_piece = False
-            score += clear_rows(grid, locked_positions) * 10    # increment score by 10 for every row cleared
+            score += clear_rows(grid, locked_positions) * 10
             update_score(score)
-
             if last_score < score:
                 last_score = score
-
         draw_window(window, grid, score, last_score)
         draw_next_shape(next_piece, window)
         pygame.display.update()
-
         if check_lost(locked_positions):
             run = False
-
     draw_text_middle('You Lost', 40, (255, 255, 255), window)
     pygame.display.update()
-    pygame.time.delay(2000)  # wait for 2 seconds
+    pygame.time.delay(2000)
     pygame.quit()
 
 
+def draw_button(surface, text, x, y, width, height, color, hover_color):
+    """Draw a button and return if it's being hovered over"""
+    mouse_pos = pygame.mouse.get_pos()
+    button_rect = pygame.Rect(x, y, width, height)
+    
+    # Check if mouse is hovering over button
+    if button_rect.collidepoint(mouse_pos):
+        pygame.draw.rect(surface, hover_color, button_rect)
+    else:
+        pygame.draw.rect(surface, color, button_rect)
+    
+    # Draw button border
+    pygame.draw.rect(surface, (255, 255, 255), button_rect, 2)
+    
+    # Draw text
+    font = pygame.font.Font(fontpath, 30)
+    label = font.render(text, 1, (255, 255, 255))
+    text_x = x + (width - label.get_width()) // 2
+    text_y = y + (height - label.get_height()) // 2
+    surface.blit(label, (text_x, text_y))
+    
+    return button_rect.collidepoint(mouse_pos)
+
 def main_menu(window):
+    global ai_mode
     run = True
     while run:
-        draw_text_middle('Press any key to begin', 50, (255, 255, 255), window)
+        window.fill((0, 0, 0))  # Fill with black background
+        
+        # Draw title
+        draw_text_middle('TETRIS', 65, (255, 255, 255), window)
+        
+        # Button dimensions and positions
+        button_width = 200
+        button_height = 60
+        center_x = s_width // 2
+        button_y = s_height // 2 + 50
+        
+        # Human mode button
+        human_button_x = center_x - button_width - 20
+        human_hover = draw_button(window, "Human Mode", human_button_x, button_y, 
+                                button_width, button_height, (0, 100, 0), (0, 150, 0))
+        
+        # AI mode button
+        ai_button_x = center_x + 20
+        ai_hover = draw_button(window, "AI Mode", ai_button_x, button_y, 
+                             button_width, button_height, (100, 0, 0), (150, 0, 0))
+        
         pygame.display.update()
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 run = False
-            elif event.type == pygame.KEYDOWN:
-                main(window)
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                if human_hover:
+                    ai_mode = False
+                    main(window)
+                elif ai_hover:
+                    ai_mode = True
+                    main(window)
 
     pygame.quit()
 
