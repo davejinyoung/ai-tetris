@@ -435,10 +435,47 @@ def main(window):
                 change_piece = True
 
         if ai_mode:
-            game_state = get_game_state(current_piece, next_piece, grid, locked_positions)
-            action = agent.choose_action(game_state)
-            perform_action(action, current_piece, grid)
-            # Optional: pygame.time.delay(50) for visibility
+            # Plan AI move if not already planned
+            if not hasattr(current_piece, 'ai_plan'):
+                game_state = get_game_state(current_piece, next_piece, grid, locked_positions)
+                action = agent.choose_action(game_state)
+                current_piece.ai_plan = {
+                    'target_x': action['x'],
+                    'target_rotation': action['rotation'],
+                    'target_y': action['y']
+                }
+            plan = current_piece.ai_plan
+            moved = False
+            # Rotate if needed
+            if current_piece.rotation != plan['target_rotation']:
+                current_piece.rotation = (current_piece.rotation + 1) % len(current_piece.shape)
+                moved = True
+            # Move horizontally if needed
+            elif current_piece.x < plan['target_x']:
+                current_piece.x += 1
+                moved = True
+            elif current_piece.x > plan['target_x']:
+                current_piece.x -= 1
+                moved = True
+            # Move down if needed
+            elif current_piece.y < plan['target_y']:
+                current_piece.y += 1
+                moved = True
+            # If at target, lock the piece
+            else:
+                change_piece = True
+                del current_piece.ai_plan
+            # Only update the display if a move was made
+            if moved:
+                temp_grid = [row[:] for row in grid]
+                piece_pos = convert_shape_format(current_piece)
+                for x, y in piece_pos:
+                    if y >= 0 and 0 <= x < col and 0 <= y < row:
+                        temp_grid[y][x] = current_piece.color
+                draw_window(window, temp_grid, score, last_score)
+                draw_next_shape(next_piece, window)
+                pygame.display.update()
+                pygame.time.wait(50)
         else:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
