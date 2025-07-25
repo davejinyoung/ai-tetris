@@ -150,55 +150,40 @@ class Piece(object):
         self.x = x
         self.y = y
         self.shape = shape
-        self.color = shape_colors[shapes.index(shape)]  # choose color from the shape_color list
-        self.rotation = 0  # chooses the rotation according to index
+        self.color = shape_colors[shapes.index(shape)]
+        self.rotation = 0
 
 
-# initialise the grid
 def create_grid(locked_pos={}):
-    grid = [[(0, 0, 0) for x in range(col)] for y in range(row)]  # grid represented rgb tuples
-
-    # locked_positions dictionary
-    # (x,y):(r,g,b)
+    grid = [[(0, 0, 0) for x in range(col)] for y in range(row)]
+    
     for y in range(row):
         for x in range(col):
             if (x, y) in locked_pos:
-                color = locked_pos[
-                    (x, y)]  # get the value color (r,g,b) from the locked_positions dictionary using key (x,y)
-                grid[y][x] = color  # set grid position to color
+                color = locked_pos[(x, y)]
+                grid[y][x] = color
 
     return grid
 
 
 def convert_shape_format(piece):
     positions = []
-    shape_format = piece.shape[piece.rotation % len(piece.shape)]  # get the desired rotated shape from piece
+    shape_format = piece.shape[piece.rotation % len(piece.shape)]
 
-    '''
-    e.g.
-       ['.....',
-        '.....',
-        '..00.',
-        '.00..',
-        '.....']
-    '''
-    for i, line in enumerate(shape_format):  # i gives index; line gives string
-        row = list(line)  # makes a list of char from string
-        for j, column in enumerate(row):  # j gives index of char; column gives char
+    for i, line in enumerate(shape_format):
+        row_list = list(line)
+        for j, column in enumerate(row_list):
             if column == '0':
                 positions.append((piece.x + j, piece.y + i))
 
     for i, pos in enumerate(positions):
-        positions[i] = (pos[0] - 2, pos[1] - 4)  # offset according to the input given with dot and zero
+        positions[i] = (pos[0] - 2, pos[1] - 4)
 
     return positions
 
 
-# checks if current position of piece in grid is valid
 def valid_space(piece, grid):
-    # makes a 2D list of all the possible (x,y)
     accepted_pos = [[(x, y) for x in range(col) if grid[y][x] == (0, 0, 0)] for y in range(row)]
-    # removes sub lists and puts (x,y) in one list; easier to search
     accepted_pos = [x for item in accepted_pos for x in item]
 
     formatted_shape = convert_shape_format(piece)
@@ -210,7 +195,6 @@ def valid_space(piece, grid):
     return True
 
 
-# check if piece is out of board
 def check_lost(positions):
     for pos in positions:
         x, y = pos
@@ -219,12 +203,10 @@ def check_lost(positions):
     return False
 
 
-# chooses a shape randomly from shapes list
 def get_shape():
     return Piece(5, 0, random.choice(shapes))
 
 
-# draws text in the middle
 def draw_text_middle(text, size, color, surface):
     font = pygame.font.Font(fontpath, size)
     label = font.render(text, 1, color)
@@ -232,54 +214,41 @@ def draw_text_middle(text, size, color, surface):
     surface.blit(label, (top_left_x + play_width/2 - (label.get_width()/2), top_left_y + play_height/2 - (label.get_height()/2)))
 
 
-# draws the lines of the grid for the game
 def draw_grid(surface):
-    r = g = b = 0
-    grid_color = (r, g, b)
-
+    grid_color = (0, 0, 0)
     for i in range(row):
-        # draw grey horizontal lines
         pygame.draw.line(surface, grid_color, (top_left_x, top_left_y + i * block_size),
                          (top_left_x + play_width, top_left_y + i * block_size))
-        for j in range(col):
-            # draw grey vertical lines
-            pygame.draw.line(surface, grid_color, (top_left_x + j * block_size, top_left_y),
+    for j in range(col):
+        pygame.draw.line(surface, grid_color, (top_left_x + j * block_size, top_left_y),
                              (top_left_x + j * block_size, top_left_y + play_height))
 
 
-# clear a row when it is filled
 def clear_rows(grid, locked):
-    # need to check if row is clear then shift every other row above down one
-    increment = 0
-    for i in range(len(grid) - 1, -1, -1):      # start checking the grid backwards
-        grid_row = grid[i]                      # get the last row
-        if (0, 0, 0) not in grid_row:           # if there are no empty spaces (i.e. black blocks)
-            increment += 1
-            # add positions to remove from locked
-            index = i                           # row index will be constant
-            for j in range(len(grid_row)):
-                try:
-                    del locked[(j, i)]          # delete every locked element in the bottom row
-                except ValueError:
-                    continue
+    """
+    Checks for completed rows, clears them, and shifts the rows above down.
+    Returns the number of rows cleared.
+    """
+    rows_to_clear = []
+    for i in range(len(grid)):
+        if (0, 0, 0) not in grid[i]:
+            rows_to_clear.append(i)
 
-    # shift every row one step down
-    # delete filled bottom row
-    # add another empty row on the top
-    # move down one step
-    if increment > 0:
-        # sort the locked list according to y value in (x,y) and then reverse
-        # reversed because otherwise the ones on the top will overwrite the lower ones
-        for key in sorted(list(locked), key=lambda a: a[1])[::-1]:
-            x, y = key
-            if y < index:                       # if the y value is above the removed index
-                new_key = (x, y + increment)    # shift position to down
-                locked[new_key] = locked.pop(key)
+    cleared_count = len(rows_to_clear)
 
-    return increment
+    if cleared_count > 0:
+        new_locked = {}
+        for (x, y), color in locked.items():
+            if y not in rows_to_clear:
+                shift = sum(1 for cleared_row_index in rows_to_clear if y < cleared_row_index)
+                new_locked[(x, y + shift)] = color
+        
+        locked.clear()
+        locked.update(new_locked)
+
+    return cleared_count
 
 
-# draws the upcoming piece
 def draw_next_shape(piece, surface):
     font = pygame.font.Font(fontpath, 30)
     label = font.render('Next shape', 1, (255, 255, 255))
@@ -290,49 +259,57 @@ def draw_next_shape(piece, surface):
     shape_format = piece.shape[piece.rotation % len(piece.shape)]
 
     for i, line in enumerate(shape_format):
-        row = list(line)
-        for j, column in enumerate(row):
+        row_list = list(line)
+        for j, column in enumerate(row_list):
             if column == '0':
                 pygame.draw.rect(surface, piece.color, (start_x + j*block_size, start_y + i*block_size, block_size, block_size), 0)
 
     surface.blit(label, (start_x, start_y - 30))
 
 
-# draws the content of the window
 def draw_window(surface, grid, score=0, last_score=0, level=1):
     surface.fill((0, 0, 0))
+
     pygame.font.init()
     font = pygame.font.Font(fontpath_mario, 65)
     label = font.render('TETRIS', 1, (255, 255, 255))
+
     surface.blit(label, ((top_left_x + play_width / 2) - (label.get_width() / 2), 30))
 
+    # current score
     font = pygame.font.Font(fontpath, 25)
-    
-    # Current Score
-    label = font.render('SCORE: ' + str(score) , 1, (255, 255, 255))
+    label = font.render('SCORE   ' + str(score) , 1, (255, 255, 255))
+
     start_x = top_left_x + play_width + 50
     start_y = top_left_y + (play_height / 2 - 100)
+
     surface.blit(label, (start_x, start_y + 200))
 
-    # High Score
-    label_hi = font.render('HIGHSCORE: ' + str(last_score), 1, (255, 255, 255))
+    # last score
+    label_hi = font.render('HIGHSCORE   ' + str(last_score), 1, (255, 255, 255))
+
     start_x_hi = top_left_x - 240
-    surface.blit(label_hi, (start_x_hi, start_y + 200))
-    
+    start_y_hi = top_left_y + 200
+
+    surface.blit(label_hi, (start_x_hi + 20, start_y_hi + 200))
+
     # Level
     label_level = font.render('LEVEL: ' + str(level), 1, (255, 255, 255))
-    surface.blit(label_level, (start_x_hi, start_y + 240))
+    surface.blit(label_level, (start_x_hi + 20, start_y_hi + 240))
 
-
+    # draw content of the grid
     for i in range(row):
         for j in range(col):
             pygame.draw.rect(surface, grid[i][j],
                              (top_left_x + j * block_size, top_left_y + i * block_size, block_size, block_size), 0)
 
     draw_grid(surface)
-    pygame.draw.rect(surface, (255, 255, 255), (top_left_x, top_left_y, play_width, play_height), 4)
 
-# update the score txt file with high score
+    # draw rectangular border around play area
+    border_color = (255, 255, 255)
+    pygame.draw.rect(surface, border_color, (top_left_x, top_left_y, play_width, play_height), 4)
+
+
 def update_score(new_score):
     score = get_max_score()
 
@@ -343,12 +320,16 @@ def update_score(new_score):
             file.write(str(score))
 
 
-# get the high score from the file
 def get_max_score():
-    with open(filepath, 'r') as file:
-        lines = file.readlines()        # reads all the lines and puts in a list
-        score = int(lines[0].strip())   # remove \n
-
+    try:
+        with open(filepath, 'r') as file:
+            lines = file.readlines()
+            if lines:
+                score = int(lines[0].strip())
+            else:
+                score = 0
+    except (FileNotFoundError, IndexError, ValueError):
+        score = 0
     return score
 
 
@@ -360,96 +341,108 @@ def get_game_state(current_piece, next_piece, grid, locked_positions):
         'locked_positions': locked_positions
     }
 
-def perform_action(action, current_piece, grid):
-    if action == 'left':
-        current_piece.x -= 1
-        if not valid_space(current_piece, grid):
-            current_piece.x += 1
-    elif action == 'right':
-        current_piece.x += 1
-        if not valid_space(current_piece, grid):
-            current_piece.x -= 1
-    elif action == 'down':
-        current_piece.y += 1
-        if not valid_space(current_piece, grid):
-            current_piece.y -= 1
-    elif action == 'rotate':
-        current_piece.rotation = current_piece.rotation + 1 % len(current_piece.shape)
-        if not valid_space(current_piece, grid):
-            current_piece.rotation = current_piece.rotation - 1 % len(current_piece.shape)
-    elif action == 'drop':
-        while valid_space(current_piece, grid):
-            current_piece.y += 1
-        current_piece.y -= 1
 
-def main(window):
+def main(window=None, agent=None, is_training=False):
+    """
+    Main game loop. Can be run in normal, AI, or training mode.
+    
+    Args:
+        window: The pygame screen surface to draw on.
+        agent: The AI agent that will play the game.
+        is_training: Flag to run in high-speed mode without visuals.
+    """
+    is_ai_controlled = False
+    if agent:
+        is_ai_controlled = True
+    else:
+        try:
+            global ai_mode
+            is_ai_controlled = ai_mode
+        except NameError:
+            is_ai_controlled = False
+
     locked_positions = {}
     
     change_piece = False
     run = True
     current_piece = get_shape()
     next_piece = get_shape()
-    clock = pygame.time.Clock()
-    fall_time = 0
     
+    if not is_training:
+        clock = pygame.time.Clock()
+    
+    fall_time = 0
     level = 1
     score = 0
     total_lines_cleared = 0
-    fall_speed = 0.35 # Initial fall speed
-    last_score = get_max_score()
-
-    if ai_mode:
-        agent = TetrisAgent()
-        # AI needs to think about the very first piece before the loop starts
-        game_state = get_game_state(current_piece, next_piece, create_grid(locked_positions), locked_positions)
-        ai_target_action = agent.choose_action(game_state)
+    fall_speed = 0.35
+    
+    if not is_training:
+        last_score = get_max_score()
     else:
-        ai_target_action = None
+        last_score = 0
+    
+    if is_ai_controlled and agent is None:
+        agent = TetrisAgent()
 
     while run:
         grid = create_grid(locked_positions)
-        fall_time += clock.get_rawtime()
-        clock.tick()
-
-        if fall_time / 1000 > fall_speed:
-            fall_time = 0
-            current_piece.y += 1
-            if not valid_space(current_piece, grid) and current_piece.y > 0:
-                current_piece.y -= 1
-                change_piece = True
-
-        if not ai_mode:
+        
+        if not is_training:
+            fall_time += clock.get_rawtime()
+            clock.tick(60)
+        
+        # Gravity Logic (ONLY for human players)
+        if not is_ai_controlled:
+            if fall_time / 1000 > fall_speed:
+                fall_time = 0
+                current_piece.y += 1
+                if not valid_space(current_piece, grid) and current_piece.y > 0:
+                    current_piece.y -= 1
+                    change_piece = True
+        
+        # Human Player Input
+        if not is_ai_controlled and not is_training:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     run = False
-                    pygame.display.quit()
-                    quit()
+                    if not is_training:
+                        update_score(score)
+                        pygame.display.quit()
+                    return score
                 elif event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_LEFT:
                         current_piece.x -= 1
-                        if not valid_space(current_piece, grid):
+                        if not valid_space(current_piece, grid): 
                             current_piece.x += 1
                     elif event.key == pygame.K_RIGHT:
                         current_piece.x += 1
-                        if not valid_space(current_piece, grid):
+                        if not valid_space(current_piece, grid): 
                             current_piece.x -= 1
                     elif event.key == pygame.K_DOWN:
                         current_piece.y += 1
-                        if not valid_space(current_piece, grid):
+                        if not valid_space(current_piece, grid): 
                             current_piece.y -= 1
                     elif event.key == pygame.K_UP:
                         current_piece.rotation = (current_piece.rotation + 1) % len(current_piece.shape)
-                        if not valid_space(current_piece, grid):
+                        if not valid_space(current_piece, grid): 
                             current_piece.rotation = (current_piece.rotation - 1) % len(current_piece.shape)
                     elif event.key == pygame.K_SPACE:
                         while valid_space(current_piece, grid):
                             current_piece.y += 1
                         current_piece.y -= 1
                         change_piece = True
-        else:
-            # AI Logic (human-like animation)
+        
+        # AI Logic
+        elif is_ai_controlled:
+            # Handle pygame events even in AI mode to prevent window freezing
+            if not is_training:
+                for event in pygame.event.get():
+                    if event.type == pygame.QUIT:
+                        run = False
+                        return score
+            
             if not hasattr(current_piece, 'ai_plan'):
-                # Plan the move for this piece
                 game_state = get_game_state(current_piece, next_piece, grid, locked_positions)
                 ai_target_action = agent.choose_action(game_state)
                 current_piece.ai_plan = {
@@ -457,14 +450,12 @@ def main(window):
                     'target_rotation': ai_target_action['rotation'],
                     'target_y': ai_target_action['y']
                 }
+            
             plan = current_piece.ai_plan
             moved = False
-            # Rotate if needed
-            if current_piece.rotation != plan['target_rotation']:
-                current_piece.rotation = (current_piece.rotation + 1) % len(current_piece.shape)
-                moved = True
-            # Move horizontally if needed
-            elif current_piece.x < plan['target_x']:
+            
+            # Move horizontally first
+            if current_piece.x < plan['target_x']:
                 current_piece.x += 1
                 if not valid_space(current_piece, grid):
                     current_piece.x -= 1
@@ -474,94 +465,107 @@ def main(window):
                 if not valid_space(current_piece, grid):
                     current_piece.x += 1
                 moved = True
-            # Move down if needed (simulate soft drop)
+            # Then rotate
+            elif current_piece.rotation != plan['target_rotation']:
+                current_piece.rotation = (current_piece.rotation + 1) % len(current_piece.shape)
+                if not valid_space(current_piece, grid):
+                    current_piece.rotation = (current_piece.rotation - 1) % len(current_piece.shape)
+                moved = True
+            # Then soft drop
             elif current_piece.y < plan['target_y']:
                 current_piece.y += 1
                 if not valid_space(current_piece, grid):
                     current_piece.y -= 1
                 moved = True
-            # If at target, lock the piece
+            # If at target, hard drop and lock
             else:
                 while valid_space(current_piece, grid):
                     current_piece.y += 1
                 current_piece.y -= 1
                 change_piece = True
-                del current_piece.ai_plan
-            # Draw the piece on a temporary grid for smooth animation
-            if moved:
-                temp_grid = [row[:] for row in grid]
-                piece_pos = convert_shape_format(current_piece)
-                for x, y in piece_pos:
-                    if y >= 0 and 0 <= x < col and 0 <= y < row:
-                        temp_grid[y][x] = current_piece.color
-                draw_window(window, temp_grid, score, last_score, level)
-                draw_next_shape(next_piece, window)
-                pygame.display.update()
-                pygame.time.wait(2)
-
-        piece_pos = convert_shape_format(current_piece)
-        for i in range(len(piece_pos)):
-            x, y = piece_pos[i]
-            if y >= 0:
-                grid[y][x] = current_piece.color
-
+                if hasattr(current_piece, 'ai_plan'):
+                    del current_piece.ai_plan
+        
+        # Piece Locking and Game State Update
         if change_piece:
+            piece_pos = convert_shape_format(current_piece)
             for pos in piece_pos:
-                p = (pos[0], pos[1])
-                locked_positions[p] = current_piece.color
+                if 0 <= pos[0] < col and 0 <= pos[1] < row:
+                    locked_positions[(pos[0], pos[1])] = current_piece.color
             
+            # Rebuild grid with locked piece before checking for line clears
+            grid = create_grid(locked_positions)
             lines_cleared_this_turn = clear_rows(grid, locked_positions)
             
             if lines_cleared_this_turn > 0:
                 total_lines_cleared += lines_cleared_this_turn
-                
                 score_multipliers = {1: 40, 2: 100, 3: 300, 4: 1200}
                 base_points = score_multipliers.get(lines_cleared_this_turn, 0)
                 score += base_points * level
                 
                 if total_lines_cleared >= level * 10:
                     level += 1
-                    if fall_speed > 0.15:
+                    if fall_speed > 0.15: 
                         fall_speed -= 0.025
+                
+                # Show line clear animation if not training
+                if not is_training and window:
+                    # Flash the cleared lines briefly
+                    temp_grid = create_grid(locked_positions)
+                    draw_window(window, temp_grid, score, last_score, level)
+                    draw_next_shape(next_piece, window)
+                    pygame.display.update()
+                    pygame.time.wait(50)
             
             current_piece = next_piece
             next_piece = get_shape()
             change_piece = False
             
-            if score > last_score:
+            if not is_training and score > last_score:
                 last_score = score
                 update_score(last_score)
 
-            if ai_mode:
-                game_state = get_game_state(current_piece, next_piece, grid, locked_positions)
-                ai_target_action = agent.choose_action(game_state)
+        # Drawing (only if not training)
+        if not is_training and window:
+            # Use the current grid state (which may have been updated by line clears)
+            display_grid = create_grid(locked_positions)
+            
+            # Add current piece to display grid only if game is still running
+            if run:
+                piece_pos = convert_shape_format(current_piece)
+                for x, y in piece_pos:
+                    if 0 <= y < row and 0 <= x < col:
+                        display_grid[y][x] = current_piece.color
+            
+            draw_window(window, display_grid, score, last_score, level)
+            draw_next_shape(next_piece, window)
+            pygame.display.update()
 
-        draw_window(window, grid, score, last_score, level)
-        draw_next_shape(next_piece, window)
-        pygame.display.update()
-
+        # Check game over condition
         if check_lost(locked_positions):
             run = False
 
-    draw_text_middle('You Lost', 40, (255, 255, 255), window)
-    pygame.display.update()
-    pygame.time.delay(2000)
+    # Game Over
+    if not is_training and window:
+        draw_text_middle('You Lost', 40, (255, 255, 255), window)
+        pygame.display.update()
+        pygame.time.delay(2000)
+    
+    return score
+
 
 def draw_button(surface, text, x, y, width, height, color, hover_color):
     """Draw a button and return if it's being hovered over"""
     mouse_pos = pygame.mouse.get_pos()
     button_rect = pygame.Rect(x, y, width, height)
     
-    # Check if mouse is hovering over button
     if button_rect.collidepoint(mouse_pos):
-        pygame.draw.rect(surface, hover_color, button_rect)
+        pygame.draw.rect(surface, hover_color, button_rect, border_radius=8)
     else:
-        pygame.draw.rect(surface, color, button_rect)
+        pygame.draw.rect(surface, color, button_rect, border_radius=8)
     
-    # Draw button border
-    pygame.draw.rect(surface, (255, 255, 255), button_rect, 2)
+    pygame.draw.rect(surface, (255, 255, 255), button_rect, 2, border_radius=8)
     
-    # Draw text
     font = pygame.font.Font(fontpath, 30)
     label = font.render(text, 1, (255, 255, 255))
     text_x = x + (width - label.get_width()) // 2
@@ -570,49 +574,49 @@ def draw_button(surface, text, x, y, width, height, color, hover_color):
     
     return button_rect.collidepoint(mouse_pos)
 
+
 def main_menu(window):
     global ai_mode
     run = True
+    clock = pygame.time.Clock()
+    
     while run:
-        window.fill((0, 0, 0))  # Fill with black background
+        window.fill((0, 0, 0))
         
-        # Draw title
-        draw_text_middle('TETRIS', 65, (255, 255, 255), window)
+        draw_text_middle('TETRIS', 80, (255, 255, 255), window)
         
-        # Button dimensions and positions
-        button_width = 200
+        button_width = 220
         button_height = 60
         center_x = s_width // 2
         button_y = s_height // 2 + 50
         
-        # Human mode button
-        human_button_x = center_x - button_width - 20
-        human_hover = draw_button(window, "Human Mode", human_button_x, button_y, 
+        human_hover = draw_button(window, "Human Mode", center_x - button_width - 20, button_y, 
                                 button_width, button_height, (0, 100, 0), (0, 150, 0))
         
-        # AI mode button
-        ai_button_x = center_x + 20
-        ai_hover = draw_button(window, "AI Mode", ai_button_x, button_y, 
+        ai_hover = draw_button(window, "AI Mode", center_x + 20, button_y, 
                              button_width, button_height, (100, 0, 0), (150, 0, 0))
         
         pygame.display.update()
+        clock.tick(60)
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 run = False
             elif event.type == pygame.MOUSEBUTTONDOWN:
-                if human_hover:
-                    ai_mode = False
-                    main(window)
-                elif ai_hover:
-                    ai_mode = True
-                    main(window)
-
+                if event.button == 1:
+                    if human_hover:
+                        ai_mode = False
+                        main(window)
+                    elif ai_hover:
+                        ai_mode = True
+                        main(window)
+    
     pygame.quit()
 
 
 if __name__ == '__main__':
+    pygame.display.init()
     win = pygame.display.set_mode((s_width, s_height))
     pygame.display.set_caption('Tetris')
 
-    main_menu(win)  # start game
+    main_menu(win)

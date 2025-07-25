@@ -1,21 +1,25 @@
 import copy
-
-from pygame.draw import lines
-
+import numpy as np
 
 class TetrisAgent:
-    def __init__(self):
-        weights = []
+    def __init__(self, weights=None):
+        """
+        Initializes the agent.
+        """
+        if weights is not None:
+            self.weights = weights
+        else:
+            self.weights = np.array([0.37831685, 0.49987323, 0.51730053, 0.14835932]) # current best weights according to GA
 
     def choose_action(self, game_state):
         """
         Given the current game state, return the best action.
         The action is the final state that the piece should land on.
         """
-        from Tetris import valid_space, convert_shape_format, col, row, clear_rows
+        from Tetris import valid_space, convert_shape_format, col, row
         current_piece = game_state['current_piece']
         grid = game_state['grid']
-        locked_positions = game_state['locked_positions']
+        
         possible_moves = []
 
         # Try all rotations
@@ -26,153 +30,107 @@ class TetrisAgent:
             # Try all columns
             for x in range(col):
                 piece.x = x
+                
+                # Find where the piece would land in this column
                 piece.y = 0
-
-                # Drop piece down until it lands
                 while valid_space(piece, grid):
                     piece.y += 1
-                piece.y -= 1  # Move back up to last valid position
+                piece.y -= 1
 
-                if valid_space(piece, grid):
-                    # Simulate locking the piece
-                    move_locked = copy.deepcopy(locked_positions)
-                    for pos in convert_shape_format(piece):
-                        if pos[1] >= 0:
-                            move_locked[(pos[0], pos[1])] = piece.color
+                # Create a temporary grid representing the board after this move
+                temp_grid = [row[:] for row in grid]
+                piece_pos = convert_shape_format(piece)
+                
+                # Check if the move is valid (not partially off-screen at the top)
+                if any(p[1] < 0 for p in piece_pos):
+                    continue
 
-                    # Create the resulting grid
-                    move_grid = [[(0, 0, 0) for _ in range(col)] for _ in range(row)]
-                    for (lx, ly), color in move_locked.items():
-                        if 0 <= lx < col and 0 <= ly < row:
-                            move_grid[ly][lx] = color
+                for x_pos, y_pos in piece_pos:
+                    if y_pos < row and x_pos < col:
+                        temp_grid[y_pos][x_pos] = piece.color
+                
+                move = {
+                    'rotation': rotation,
+                    'x': x,
+                    'y': piece.y,
+                    'resulting_grid': temp_grid,
+                }
+                possible_moves.append(move)
+        
+        if not possible_moves:
+             return {'rotation': 0, 'x': 5, 'y': 0} # Default move if no valid moves found
 
-                    # Optionally, simulate row clearing
-                    # clear_rows(move_grid, move_locked)
-
-                    # if any position has a negative value, continue the loop
-                    positions = convert_shape_format(piece)
-                    if any(pos[1] < 0 for pos in positions):
-                        continue  # Skip moves where the piece is not fully on the board
-
-                    move = {
-                        'rotation': rotation,
-                        'x': x,
-                        'y': piece.y,
-                        'positions': positions,
-                        'resulting_grid': move_grid,
-                        'eval_score': 0
-                    }
-                    possible_moves.append(move)
-
-            best_move = self.evaluate_moves(possible_moves)
-
+        best_move = self.evaluate_moves(possible_moves)
         return best_move
 
-    # Heuristic evaluation of resulting grid state given every possible move
     def evaluate_moves(self, possible_moves):
-        temp_weights = [1, 1, 1, 1] # TODO: replace these placeholder weights for trained weights from GA
-        # Heuristic evaluations: lines cleared (+), holes (-), bumpiness (-), Aggregate Height (-)
+        """Heuristic evaluation of resulting grid state given every possible move."""
+        best_score = -float('inf')
         best_move = possible_moves[0]
+
         for move in possible_moves:
-            lines_cleared = self.lines_cleared(move['resulting_grid'])
-            holes = self.count_holes(move['resulting_grid'])
-            aggregate_height = self.get_aggregate_height(move['resulting_grid'])
-            bumpiness = self.get_bumpiness(move['resulting_grid'])
+            grid = move['resulting_grid']
+            
+            lines_cleared = self.lines_cleared(grid)
+            holes = self.count_holes(grid)
+            aggregate_height = self.get_aggregate_height(grid)
+            bumpiness = self.get_bumpiness(grid)
+            
+            # Use the agent's weights for evaluation
+            score = (self.weights[0] * lines_cleared -
+                     self.weights[1] * holes -
+                     self.weights[2] * aggregate_height -
+                     self.weights[3] * bumpiness)
 
-            move['eval_score'] = (temp_weights[0]*lines_cleared -
-                                  temp_weights[1]*holes -
-                                  temp_weights[2]*aggregate_height -
-                                  temp_weights[3]*bumpiness)
-
-            if move['eval_score'] > best_move['eval_score']:
+            if score > best_score:
+                best_score = score
                 best_move = move
-
+        
         return best_move
 
     def lines_cleared(self, resulting_grid):
-        cleared_lines = [line for line in resulting_grid if (0, 0, 0) not in line]
-        return len(cleared_lines)
+        """Counts the number of lines to be cleared in the given grid"""
+        cleared_lines = 0
+        for row in resulting_grid:
+            if (0, 0, 0) not in row:
+                cleared_lines += 1
+        return cleared_lines
 
     def count_holes(self, resulting_grid):
+        """Counts the number of holes in the given grid"""
         total_holes = 0
-
-        # Check if the grid is empty to avoid errors
-        if not resulting_grid or not resulting_grid[0]:
-            return 0
-
-        num_rows = len(resulting_grid)
         num_cols = len(resulting_grid[0])
-
-        # Iterate through each column from left to right
-        for col in range(num_cols):
-            block_found_in_column = False
-            # Scan down the column from top to bottom
-            for row in range(num_rows):
-                # Check if the cell is filled
-                if resulting_grid[row][col] != (0, 0, 0):
-                    block_found_in_column = True
-                # If we've already passed a block in this column and the current cell is empty...
-                elif block_found_in_column and resulting_grid[row][col] == (0, 0, 0):
-                    # ...it's a hole.
+        for col_idx in range(num_cols):
+            block_found = False
+            for row_idx in range(len(resulting_grid)):
+                if resulting_grid[row_idx][col_idx] != (0, 0, 0):
+                    block_found = True
+                elif block_found and resulting_grid[row_idx][col_idx] == (0, 0, 0):
                     total_holes += 1
-
         return total_holes
 
     def get_aggregate_height(self, resulting_grid):
-        """
-        Calculates the sum of the heights of all columns.
-        """
-        total_height = 0
-        if not resulting_grid or not resulting_grid[0]:
-            return 0
-
-        num_rows = len(resulting_grid)
-        num_cols = len(resulting_grid[0])
-
-        # Iterate through each column
-        for col in range(num_cols):
-            column_height = 0
-            # Scan down the column to find the first filled block
-            for row in range(num_rows):
-                if resulting_grid[row][col] != (0, 0, 0):
-                    # The height is the distance from the bottom
-                    column_height = num_rows - row
-                    break  # Move to the next column
-            total_height += column_height
-
-        return total_height
+        """Sum of the column height"""
+        heights = self.get_column_heights(resulting_grid)
+        return sum(heights)
 
     def get_column_heights(self, resulting_grid):
-        """
-        Returns a list containing the height of each column.
-        """
-        if not resulting_grid or not resulting_grid[0]:
-            return []
-
+        """All column heights"""
         num_rows = len(resulting_grid)
         num_cols = len(resulting_grid[0])
         heights = [0] * num_cols
-
-        for col in range(num_cols):
-            for row in range(num_rows):
-                if resulting_grid[row][col] != (0, 0, 0):
-                    heights[col] = num_rows - row
+        for col_idx in range(num_cols):
+            for row_idx in range(num_rows):
+                if resulting_grid[row_idx][col_idx] != (0, 0, 0):
+                    heights[col_idx] = num_rows - row_idx
                     break
         return heights
 
+    
     def get_bumpiness(self, resulting_grid):
-        """
-        Calculates the total bumpiness of the board.
-        """
+        """The total difference in height between columns"""
         heights = self.get_column_heights(resulting_grid)
-
-        if not heights:
-            return 0
-
         total_bumpiness = 0
-        # Iterate through all adjacent column pairs
         for i in range(len(heights) - 1):
-            total_bumpiness += abs(heights[i] - heights[i + 1])
-
+            total_bumpiness += abs(heights[i] - heights[i+1])
         return total_bumpiness
-
