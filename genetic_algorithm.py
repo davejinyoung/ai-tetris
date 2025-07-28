@@ -17,14 +17,16 @@ class GeneticAlgorithm:
         """Creates an initial population of agents with random weights."""
         population = []
         for _ in range(POPULATION_SIZE):
-            # Weights are initialized between -1 and 1
-            weights = np.array([0.37831685, 0.49987323, 0.51730053, 0.14835932])
+            # Weights are initialized between 0 and 1
+            # weights = np.array([0.37831685, 0.49987323, 0.51730053, 0.14835932])
+            weights = np.random.rand(4)
             population.append(TetrisAgent(weights=weights))
         return population
 
-    def run_generation(self):
+    def run_generation(self, generation):
         """Runs a single generation of the genetic algorithm."""
-        
+        # Create seed for current generation so that all games have same sequence of pieces
+        random.seed(generation)
         # 1. Evaluate Fitness
         fitness_scores = []
         for i, agent in enumerate(self.population):
@@ -87,7 +89,7 @@ def train():
     
     for generation in range(NUM_GENERATIONS):
         print(f"--- Starting Generation {generation+1}/{NUM_GENERATIONS} ---")
-        ga.run_generation()
+        ga.run_generation(generation)
         
         # Optionally, save the best weights of this generation
         best_agent = ga.population[0]

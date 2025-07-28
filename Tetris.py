@@ -381,7 +381,7 @@ def main(window=None, agent=None, is_training=False):
         last_score = get_max_score()
     else:
         last_score = 0
-    
+
     if is_ai_controlled and agent is None:
         agent = TetrisAgent()
 
@@ -452,31 +452,26 @@ def main(window=None, agent=None, is_training=False):
                 }
             
             plan = current_piece.ai_plan
-            moved = False
-            
+
             # Move horizontally first
             if current_piece.x < plan['target_x']:
                 current_piece.x += 1
                 if not valid_space(current_piece, grid):
                     current_piece.x -= 1
-                moved = True
             elif current_piece.x > plan['target_x']:
                 current_piece.x -= 1
                 if not valid_space(current_piece, grid):
                     current_piece.x += 1
-                moved = True
             # Then rotate
             elif current_piece.rotation != plan['target_rotation']:
                 current_piece.rotation = (current_piece.rotation + 1) % len(current_piece.shape)
                 if not valid_space(current_piece, grid):
                     current_piece.rotation = (current_piece.rotation - 1) % len(current_piece.shape)
-                moved = True
             # Then soft drop
             elif current_piece.y < plan['target_y']:
                 current_piece.y += 1
                 if not valid_space(current_piece, grid):
                     current_piece.y -= 1
-                moved = True
             # If at target, hard drop and lock
             else:
                 while valid_space(current_piece, grid):
@@ -571,7 +566,7 @@ def draw_button(surface, text, x, y, width, height, color, hover_color):
     text_x = x + (width - label.get_width()) // 2
     text_y = y + (height - label.get_height()) // 2
     surface.blit(label, (text_x, text_y))
-    
+
     return button_rect.collidepoint(mouse_pos)
 
 
