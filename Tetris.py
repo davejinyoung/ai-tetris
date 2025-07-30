@@ -154,6 +154,21 @@ class Piece(object):
         self.rotation = 0
 
 
+class PieceBag:
+    def __init__(self):
+        self.pieces = []
+
+    def get_shape(self):
+        if not self.pieces:
+            bag = list(shapes)
+            random.shuffle(bag)
+            pieces = []
+            for shape in bag:
+                pieces.append(Piece(5, 0, shape))
+            self.pieces = pieces
+        return self.pieces.pop()
+
+
 def create_grid(locked_pos={}):
     grid = [[(0, 0, 0) for x in range(col)] for y in range(row)]
     
@@ -201,10 +216,6 @@ def check_lost(positions):
         if y < 1:
             return True
     return False
-
-
-def get_shape():
-    return Piece(5, 0, random.choice(shapes))
 
 
 def draw_text_middle(text, size, color, surface):
@@ -365,8 +376,10 @@ def main(window=None, agent=None, is_training=False):
     
     change_piece = False
     run = True
-    current_piece = get_shape()
-    next_piece = get_shape()
+
+    pieces = PieceBag()
+    current_piece = pieces.get_shape()
+    next_piece = pieces.get_shape()
     
     if not is_training:
         clock = pygame.time.Clock()
@@ -513,7 +526,7 @@ def main(window=None, agent=None, is_training=False):
                     pygame.time.wait(50)
             
             current_piece = next_piece
-            next_piece = get_shape()
+            next_piece = pieces.get_shape()
             change_piece = False
             
             if not is_training and score > last_score:

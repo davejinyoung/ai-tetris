@@ -9,7 +9,7 @@ class TetrisAgent:
         if weights is not None:
             self.weights = weights
         else:
-            self.weights = np.array([0.52906766, 0.80255314, 0.32826192, 0.26066793]) # current best weights according to GA
+            self.weights = np.array([0.55580476, 0.83967109, 0.32826192, 0.26066793]) # current best weights according to GA
 
     def choose_action(self, game_state):
         """
