@@ -12,10 +12,6 @@ If you want to run the AI solver, you can use the following command:
 python3 genetic_algorithm.py
 ```
 
-## Screenshots
+## Demo
 
-![1](https://github.com/rajatdiptabiswas/tetris-pygame/blob/master/screenshot-start.png)
-*Startup screen*
-
-![2](https://github.com/rajatdiptabiswas/tetris-pygame/blob/master/screenshot-active.png)
-*Active game screen*
+https://github.com/user-attachments/assets/0f686ac3-4aca-43b1-a1b2-0044e2ca5d05
